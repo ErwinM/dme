@@ -31,6 +31,7 @@ typedef ushort ROM[16834];
 typedef ushort RAM[32768];
 
 enum signalstate { ZZ, RE, HI, FE, LO };
+enum clkstate { clk_LO, clk_RE, clk_HI, clk_FE};
 
 struct control_sig {
   enum signalstate selain;
@@ -61,6 +62,11 @@ struct bus_sig {
   ushort ALUout;
   ushort pc;
   ushort inM;
+};
+
+struct clk {
+  enum signalstate phase;
+  int tick;
 };
 
 #endif

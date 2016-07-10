@@ -12,7 +12,9 @@
 void ALU(ushort *x, ushort *y, char *func, ushort *ALUout);
 ushort readrom(ushort addr);
 ushort readram(ushort addr);
-ushort controller(ushort *clk);
+void writeram(ushort addr, ushort value);
+void signal_pass(ushort *clk);
+void latch_pass(enum signalstate clk_phase);
 int update_csig(enum signalstate *csignal, enum signalstate state);
 int update_bsig(ushort *bsignal, ushort *value);
 
@@ -30,6 +32,7 @@ RAM *ram_p;
 struct control_sig *csig;
 struct ALU_sig *alusig;
 struct bus_sig *bussig;
+struct clk clk;
 
 char *ALUfunc[7];
 
@@ -37,28 +40,41 @@ int updated;
 
 int main()
 {
-
-  char *func;
-  func = (char *) malloc(7);
-  strcpy(func, "101010");
-
+  int cycle;
+  int pcycle;
   init();
 
-  controller( 0);
+  for(clk.tick = 0; clk.tick < 6; clk.tick++) {
+    for(clk.phase=0; clk.phase<5; clk.phase++){
 
+      printf("------------------------------------------------------\n");
+      printf("cycle: %d.%d - PC: %x, A: %x, D: %x\n", clk.tick, clk.phase, bussig->pc, bussig->Aregout, bussig->Dregout);
+
+      // Signal phase - also reads ROM/RAM
+      updated = 1;
+      cycle = 0;
+      while(updated==1 && cycle < 5) {
+        updated = 0;
+        cycle += 1;
+        signal_pass(0);
+      }
+      printf("Stable after %d cycles.\n", cycle);
+
+      // Latch pass - single pass!
+      latch_pass(clk.phase);
+    }
+  }
 }
 
 void init(void) {
 
 
-  Areg = (struct Areg *)malloc(sizeof(struct Areg));
-  Dreg = (struct Dreg *)malloc(sizeof(struct Dreg));
-  ymux = (struct mux *)malloc(sizeof(struct mux));
-  imux = (struct mux *)malloc(sizeof(struct mux));
+  Areg = (struct Areg *)calloc(1, sizeof(struct Areg));
+  Dreg = (struct Dreg *)calloc(1, sizeof(struct Dreg));
   csig = malloc(sizeof(struct control_sig));
   alusig = malloc(sizeof(struct ALU_sig));
   bussig = calloc(1, sizeof(struct bus_sig));
-  bussig->pc = 3;
+  bussig->pc = 0;
 
   rom[0]=0x0002;
   rom[1]=0xec10;
@@ -71,7 +87,7 @@ void init(void) {
   return;
 }
 
-ushort controller(ushort *clk) {
+void signal_pass(ushort *clk) {
   // fetch the instruction from ROM
   ushort instr;
   char *instr_b;
@@ -120,7 +136,7 @@ ushort controller(ushort *clk) {
   }
   // c6 - jump
   memcpy(jcond_s, instr_b+13, 3);
-  printf("jcond_s is: %s\n", jcond_s);
+  //printf("jcond_s is: %s\n", jcond_s);
   jcond = bin3_to_dec(jcond_s);
   printf("jcond is: %d\n", jcond);
 
@@ -157,18 +173,19 @@ ushort controller(ushort *clk) {
   if (getbit16(instr_b, 15) == 1 && jcondmet == 1) {
     // c instruction and jump condition is met
     update_csig(&csig->jump, HI);
+    printf("Jump is HI!\n");
   } else {
     update_csig(&csig->jump, LO);
   }
 
   // immMux
-  if (csig->selain) {
+  if (csig->selain == HI) {
     update_bsig(&bussig->ain, &instr);
   } else {
     update_bsig(&bussig->ain, &bussig->ALUout);
   }
   // YMux
-  if (csig->sely) {
+  if (csig->sely == HI) {
     update_bsig(&bussig->ALUy, &bussig->inM);
   } else {
     update_bsig(&bussig->ALUy, &bussig->Aregout);
@@ -182,21 +199,45 @@ ushort controller(ushort *clk) {
   ALU(&bussig->Dregout, &bussig->ALUy, ALUfunc, &ALUtemp);
   update_bsig(&bussig->ALUout, &ALUtemp);
 
+}
+
+void latch_pass(enum signalstate clk_phase){
+
+  // only latch on rising edge
+  if (clk_phase != clk_RE)
+    return;
+
+  printf("Latch pass\n");
+
+  // Areg
+  if (csig->loada == HI) {
+    bussig->Aregout = bussig->ain;
+    printf("A <- %x\n", bussig->ain);
+  }
+  if (csig->loadd == HI) {
+    bussig->Dregout = bussig->ALUout;
+    printf("D <- %x\n", bussig->ALUout);
+  }
+
+  // RAM
+  if (csig->wren == HI) {
+    writeram(bussig->Aregout, bussig->ALUout);
+    printf("RAM[%x] <- %x\n", bussig->Aregout, bussig->ain);
+  }
+
   // PC
-  if (csig->jump) {
+  if (csig->jump == HI) {
     bussig->pc = bussig->Aregout;
   } else {
     bussig->pc += 1;
   }
-
-
+  printf("PC <- %x\n", bussig->pc);
 }
 
+
 int update_csig(enum signalstate *csignal, enum signalstate state) {
-  if (*csignal != state) {
-      printf("Update detected!\n");
-      updated = 1;
-  }
+  if (*csignal != state)
+    updated = 1;
   *csignal = state;
 }
 
@@ -224,15 +265,21 @@ void ALU(ushort *x, ushort *y, char *func, ushort *ALUout) {
   if (getbit6(func, 5)==1) {
     *ALUout = ~(*ALUout);
   }
-  printf("Alu out: %d", *ALUout);
+  printf("Alu x: %d, ", *x);
+  printf("Alu y: %d, ", *y);
+  printf("Alu out: %d\n", *ALUout);
 }
 
 ushort readrom(ushort addr) {
-  printf("Reading ROM at address: %x\n", addr);
+  //printf("Reading ROM at address: %x\n", addr);
   return rom[addr];
 }
 
 ushort readram(ushort addr) {
-  printf("Reading RAM at address: %x\n", addr);
+  //printf("Reading RAM at address: %x\n", addr);
   return ram[addr];
+}
+
+void writeram(ushort addr, ushort value) {
+  ram[addr] = value;
 }
