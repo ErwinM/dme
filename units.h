@@ -29,7 +29,7 @@ struct bus_sig {
 };*/
 
 struct clk {
-  enum signalstate phase;
+  enum clkstate phase;
   int tick;
 };
 

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "defs.h"
 #include "units.h"
@@ -14,10 +15,10 @@ ushort readrom(ushort addr);
 ushort readram(ushort addr);
 void writeram(ushort addr, ushort value);
 void signame_pass(ushort *clk);
-void latch_pass(enum signalstate clk_phase);
+void latch_pass(enum clkstate clk_phase);
 int update_csig(enum control_sigs signame, enum signalstate state);
 int update_bsig(int signame, ushort *value);
-
+void setconsole(enum clkstate phase, int vflag);
 void init();
 
 // Global variables
@@ -39,23 +40,84 @@ char *ALUfunc[7];
 
 int updated;
 
+int stdoutBackupFd;
+FILE *nullOut;
+
 int main(int argc,char *argv[])
 {
   int cycle;
   int tempie;
   init();
+  int instrcount;
+  int maxticks = 0;
 
-  bsig[ALUOUT]=66;
-  printf("test: %s(%d)\n", BSIG_STRING[ALUOUT], ALUOUT);
-  printf("value-1: %d", bsig[3]);
-  printf("value: %d", bsig[ALUOUT]);
-  printf("value+1: %d", bsig[5]);
-  printf("--------------------------");
-  tempie = 77;
-  update_bsig(ALUOUT, &tempie);
+  /* duplicate stdout */
+  stdoutBackupFd = dup(1);
 
-  for(clk.tick = 0; clk.tick < 16; clk.tick++) {
-    for(clk.phase=0; clk.phase<5; clk.phase++){
+  // Option parsing
+  int vflag = 0;
+  int bflag = 0;
+  char *filename = NULL;
+  int index;
+  int c;
+
+  opterr = 0;
+  while ((c = getopt (argc, argv, "vf:t:")) != -1) {
+    switch (c)
+      {
+      case 'v':
+        vflag = 1;
+        break;
+      case 'f':
+        filename = optarg;
+        break;
+      case 't':
+        maxticks = atoi(optarg);
+      case '?':
+        if (optopt == 'f' || optopt == 't')
+          fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+        else if (isprint (optopt))
+          fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+        else
+          fprintf (stderr,
+                   "Unknown option character `\\x%x'.\n",
+                   optopt);
+        return 1;
+      default:
+        abort ();
+      }
+  }
+//  printf ("vflag = %d, filename = %s\n",
+//          vflag, filename);
+
+  // Read the source
+  FILE* file = fopen(filename, "r"); /* should check the result */
+  char line[256];
+
+  int addr = 0;
+  while (fgets(line, sizeof(line), file)) {
+    /* note that fgets don't strip the terminating \n, checking its
+       presence would allow to handle lines longer that sizeof(line) */
+    sscanf(line, "%hx", &rom[addr]);
+    addr++;
+  }
+
+  if (maxticks == 0)
+    maxticks = addr; // equal to program length
+
+  // buffer[strcspn(buffer, "\n")] = 0;
+
+  while(addr >= 0){
+    printf("%x\n", rom[addr]);
+    addr--;
+  }
+
+
+  // Main execution loop
+  for(clk.tick = 0; clk.tick < maxticks; clk.tick++) {
+    for(clk.phase=clk_LO; clk.phase<= clk_FE; clk.phase++){
+
+      setconsole(clk.phase, vflag);
 
       printf("------------------------------------------------------\n");
       printf("cycle: %d.%d - PC: %x, A: %x, D: %x\n", clk.tick, clk.phase, bsig[PC], bsig[AREGOUT], bsig[DREGOUT]);
@@ -74,6 +136,14 @@ int main(int argc,char *argv[])
       // Latch pass - single pass!
       latch_pass(clk.phase);
     }
+    setconsole(clk_RE, 0);
+  }
+
+  // Dump lower part of RAM
+  printf("----------------------------RAM-----------------------------\n");
+  int i;
+  for(i=0;i<11;i++){
+    printf("RAM[%04x]: %04x\n", i, readram(i));
   }
 }
 
@@ -84,32 +154,8 @@ void init(void) {
   //bussig = calloc(1, sizeof(struct bus_sig));
   bsig[PC] = 0;
 
-  /* Add.hack
-  rom[0]=0x0002;
-  rom[1]=0xec10;
-  rom[2]=0x0003;
-  rom[3]=0xe090;
-  rom[4]=0x0000;
-  rom[5]=0xe308;
-  */
 
-  rom[0]=0x0000;
-  rom[1]=0xfc10;
-  rom[2]=0x0001;
-  rom[3]=0xf4d0;
-  rom[4]=0x000a;
-  rom[5]=0xe301;
-  rom[6]=0x0001;
-  rom[7]=0xfc10;
-  rom[8]=0x000c;
-  rom[9]=0xea87;
-  rom[10]=0x0000;
-  rom[11]=0xfc10;
-  rom[12]=0x0002;
-  rom[13]=0xe308;
-  rom[14]=0x000e;
-  rom[15]=0xea87;
-
+  // initialize RAM
   ram[0]=6;
   ram[1]=3;
 
@@ -125,7 +171,6 @@ void signame_pass(ushort *clk) {
   int jcond;
   char *jcond_s[4];
   int jcondmet;
-
 
   // Memory read
   instr = readrom(bsig[PC]);
@@ -238,7 +283,7 @@ void signame_pass(ushort *clk) {
   update_bsig(ALUOUT, &ALUtemp);
 }
 
-void latch_pass(enum signalstate clk_phase){
+void latch_pass(enum clkstate clk_phase){
 
   // only latch on rising edge
   if (clk_phase != clk_RE)
@@ -341,4 +386,21 @@ ushort readram(ushort addr) {
 
 void writeram(ushort addr, ushort value) {
   ram[addr] = value;
+}
+
+void setconsole(enum clkstate phase, int vflag) {
+  if (vflag)
+    return;
+
+  if (phase != clk_RE ) {
+    fflush(stdout);
+    nullOut = fopen("/dev/null", "w");
+    dup2(fileno(nullOut), 1);
+  } else {
+    fflush(stdout);
+    fclose(nullOut);
+    // Restore stdout
+    dup2(stdoutBackupFd, 1);
+    //close(stdoutBackupFd);
+  }
 }
