@@ -4,56 +4,20 @@
 #include "types.h"
 
 
-// ALU, PC and Decoder will be functions
-
-struct Areg {
-  ushort *in;
-  ushort out;
-  ushort *wren;
-  ushort *clk;
-};
-
-struct Dreg {
-  ushort *in;
-  ushort out;
-  ushort *wren;
-  ushort *clk;
-};
-
-struct mux {
-  ushort *sel;
-  ushort *a;
-  ushort *b;
-  ushort out;
-};
-
 typedef ushort ROM[16834];
 typedef ushort RAM[32768];
 
 enum signalstate { ZZ, RE, HI, FE, LO };
 enum clkstate { clk_LO, clk_RE, clk_HI, clk_FE};
 
-struct control_sig {
-  enum signalstate selain;
-  enum signalstate loada;
-  enum signalstate loadd;
-  enum signalstate sely;
-  enum signalstate ALUfunc;
-  enum signalstate jump;
-  enum signalstate wren;
-  enum signalstate ALU1;
-  enum signalstate ALU2;
-  enum signalstate ALU3;
-  enum signalstate ALU4;
-  enum signalstate ALU5;
-  enum signalstate ALU6;
-};
 
-struct ALU_sig {
-  enum signalstate zr;
-  enum signalstate ng;
-};
+enum control_sigs {SELAIN, LOADA, LOADD, SELY, JUMP, WREN, ZR, NG};
+static const char *CSIG_STRING[] = { "selain", "loada", "loadd", "sely", "jump", "wren", "zr", "ng"};
 
+enum bus_sigs {AIN, AREGOUT, ALUY, DREGOUT, ALUOUT, PC, INM};
+static const char *BSIG_STRING[] = { "ain", "Aregout", "ALUy", "Dregout", "ALUout", "pc", "inM"};
+
+/*
 struct bus_sig {
   ushort ain;
   ushort Aregout;
@@ -62,7 +26,7 @@ struct bus_sig {
   ushort ALUout;
   ushort pc;
   ushort inM;
-};
+};*/
 
 struct clk {
   enum signalstate phase;
