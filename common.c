@@ -20,12 +20,12 @@ int getbit16(char *bitstring, int bitnr){
   return result;
 }
 
-int getbit6(char *bitstring, int bitnr){
+int getbit3(char *bitstring, int bitnr){
   char bitchar;
   int result;
 
-  if (bitnr > 6) {
-    printf("Requesting bit > 15!!\n");
+  if (bitnr > 3) {
+    printf("Requesting bit > 3!!\n");
     exit(0);
   }
 
@@ -47,6 +47,54 @@ int bin3_to_dec(char *bin) {
     result += 1;
   return result;
 }
+int bin7_to_dec(char *bin) {
+  int result;
+
+  result=0;
+  if (bin[0] == '1')
+    result += 64;
+  if (bin[1] == '1')
+    result += 32;
+  if (bin[2] == '1')
+    result += 16;
+  if (bin[3] == '1')
+    result += 8;
+  if (bin[4] == '1')
+    result += 4;
+  if (bin[5] == '1')
+    result += 2;
+  if (bin[6] == '1')
+    result += 1;
+  return result;
+}
+int bin10_to_dec(char *bin) {
+  int result;
+
+  result=0;
+  if (bin[0] == '1')
+    result += 512;
+  if (bin[1] == '1')
+    result += 256;
+  if (bin[2] == '1')
+    result += 128;
+  if (bin[3] == '1')
+    result += 64;
+  if (bin[4] == '1')
+    result += 32;
+  if (bin[5] == '1')
+    result += 16;
+  if (bin[6] == '1')
+    result += 8;
+  if (bin[7] == '1')
+    result += 4;
+  if (bin[8] == '1')
+    result += 2;
+  if (bin[9] == '1')
+    result += 1;
+  return result;
+}
+
+
 
 
 char *decimal_to_binary16(int n) {
