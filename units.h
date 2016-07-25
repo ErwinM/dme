@@ -15,8 +15,8 @@ enum clkstate { clk_FE, clk_RE };
 #define EXECUTE    2
 #define MEM        3
 
-enum control_sigs {MAR_LOAD, IR_LOAD, PC_LOAD, MDR_LOAD, MDR_SEL, RF_LOAD, MAR_SEL, RAM_LOAD, IMM_LOAD, IMMRAM_SEL};
-static const char *CSIG_STRING[] = { "MAR_LOAD", "IR_LOAD", "PC_LOAD", "MDR_LOAD", "MDR_SEL", "RF_LOAD", "MAR_SEL", "RAM_LOAD", "IMM_LOAD", "IMMRAM_SEL" };
+enum control_sigs {MAR_LOAD, IR_LOAD, PC_LOAD, MDR_LOAD, MDR_SEL, RF_LOAD, MAR_SEL, RAM_LOAD, IMM_LOAD, SKIP};
+static const char *CSIG_STRING[] = { "MAR_LOAD", "IR_LOAD", "PC_LOAD", "MDR_LOAD", "MDR_SEL", "RF_LOAD", "MAR_SEL", "RAM_LOAD", "IMM_LOAD", "SKIP" };
 
 enum bus_sigs {  REG0, REGA, REGB, REGC, REGD, REGE, SP, PC, IR, MAR, MDR, OP0, OP1, OP2, OP3, CR, IRimm, MDRin, MARin, ALUout, NA=99};
 static const char *BSIG_STRING[] = { "REG0", "REGA", "REGB", "REGC", "REGD", "REGE", "SP", "PC", "IR", "MAR", "MDR", "OP0", "OP1", "OP2", "OP3", "CR", "IRimm", "MDRin", "MARin", "ALUout" };

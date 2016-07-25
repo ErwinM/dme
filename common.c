@@ -35,6 +35,18 @@ int getbit3(char *bitstring, int bitnr){
   return result;
 }
 
+int bin2_to_dec(char *bin) {
+  int result;
+
+  result=0;
+  if (bin[0] == '1')
+    result += 2;
+  if (bin[1] == '1')
+    result += 1;
+  return result;
+}
+
+
 int bin3_to_dec(char *bin) {
   int result;
 
@@ -94,6 +106,39 @@ int bin10_to_dec(char *bin) {
   return result;
 }
 
+int bin13_to_dec(char *bin) {
+  int result;
+
+  result=0;
+  if (bin[0] == '1')
+    result += 4196;
+  if (bin[1] == '1')
+    result += 2048;
+  if (bin[2] == '1')
+    result += 1024;
+  if (bin[3] == '1')
+    result += 512;
+  if (bin[4] == '1')
+    result += 256;
+  if (bin[5] == '1')
+    result += 128;
+  if (bin[6] == '1')
+    result += 64;
+  if (bin[7] == '1')
+    result += 32;
+  if (bin[8] == '1')
+    result += 16;
+  if (bin[9] == '1')
+     result += 8;
+  if (bin[10] == '1')
+     result += 4;
+  if (bin[11] == '1')
+     result += 2;
+  if (bin[12] == '1')
+     result += 1;
+
+  return result;
+}
 
 
 

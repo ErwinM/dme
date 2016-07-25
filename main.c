@@ -71,7 +71,7 @@ int main(int argc,char *argv[])
   int tempie;
   init();
   int instrcount;
-  int maxticks = 16;
+  int maxticks = 24;
 
   /* duplicate stdout */
   stdoutBackupFd = dup(1);
@@ -143,7 +143,7 @@ int main(int argc,char *argv[])
 
       printf("------------------------------------------------------\n");
       printf("cycle: %d.%d, state: %d - PC: %x, MAR: %x, MDR: %x, RF_sel: %x\n", clk.tick, clk.phase, icycle, bsig[PC], bsig[MAR], bsig[MDR], rf_sel);
-      printf("ALU: %x, zr: %x, ng: %x, \n", bsig[REG0]);
+      printf("ALU: %x, zr: %x, ng: %x, \n", csig[MAR_SEL]);
 
 
       // signal generation phase
@@ -198,6 +198,7 @@ void init(void) {
   ram[2]=0xc653;
   ram[3]=0x4283;
   ram[4]=0x284;
+  ram[5]=0xE451;
 
   printf("Init done..\n");
 }
@@ -208,8 +209,12 @@ generate_signals() {
 
   ushort instr;
   ushort opc1;
+  ushort opc2;
+  ushort opc3;
+  ushort opc4;
   ushort imm0;
   ushort imm1;
+  ushort imm2;
   ushort imm3;
   ushort arg0;
   ushort arg1;
@@ -220,50 +225,71 @@ generate_signals() {
 
   char *instr_b;
   char opc1_b[3];
+  char opc2_b;
+  char opc3_b[2];
+  char opc4_b[3];
   char imm0_b[7];
   char imm1_b[10];
+  char imm2_b[13];
   char imm3_b[3];
   char arg0_b[3];
   char arg1_b[3];
   char dest_b[3];
   char ir_b;
 
-  if(bsig[IR] != 0) {
+  int skipcond = 0;
 
-    printf("IR: %x", bsig[IR]);
-    // parse instruction
-    instr_b = decimal_to_binary16(bsig[IR]);
-    printf("instruction: %s", instr_b);
+  if(bsig[IR] == 0)
+    return;
 
-    memcpy(ALUopc, instr_b+3, 3);
+  printf("IR: %x, ", bsig[IR]);
+  // parse instruction
+  instr_b = decimal_to_binary16(bsig[IR]);
+  printf("instruction: %s, ", instr_b);
 
-    memcpy(opc1_b, instr_b, 3);
-    opc1 = bin3_to_dec(opc1_b);
+  memcpy(ALUopc, instr_b+3, 3);
 
-    // parse arguments - immediates
-    memcpy(imm0_b, instr_b+3, 7);
-    imm0 = bin7_to_dec(imm0_b);
+  memcpy(opc1_b, instr_b, 3);
+  opc1 = bin3_to_dec(opc1_b);
 
-    memcpy(imm1_b, instr_b+3, 10);
-    imm1 = bin10_to_dec(imm1_b);
+  opc2_b = instr_b[3];
+  opc2 = opc2_b - '0';
 
-    memcpy(imm3_b, instr_b+7, 3);
-    imm3 = bin3_to_dec(imm1_b);
+  memcpy(opc3_b, instr_b+4, 2);
+  opc3 = bin2_to_dec(opc3_b);
 
-    // parse arguments - operands
-    memcpy(arg0_b, instr_b+7, 3);
-    arg0 = bin3_to_dec(arg0_b);
 
-    memcpy(arg1_b, instr_b+10, 3);
-    arg1 = bin3_to_dec(arg1_b);
+  memcpy(opc4_b, instr_b+4, 3);
+  opc4 = bin3_to_dec(opc4_b);
 
-    memcpy(dest_b, instr_b+13, 3);
-    dest = bin3_to_dec(dest_b);
+  // parse arguments - immediates
+  memcpy(imm0_b, instr_b+3, 7);
+  imm0 = bin7_to_dec(imm0_b);
 
-    ir_b = instr_b[6];
-    //printf("i/r: %c", ir_b);
-    ir = ir_b - '0';
-  }
+  memcpy(imm1_b, instr_b+3, 10);
+  imm1 = bin10_to_dec(imm1_b);
+
+  memcpy(imm2_b, instr_b+3, 13);
+  imm2 = bin13_to_dec(imm2_b);
+  //printf("imm2: %s", imm2_b);
+
+  memcpy(imm3_b, instr_b+7, 3);
+  imm3 = bin3_to_dec(imm3_b);
+
+  // parse arguments - operands
+  memcpy(arg0_b, instr_b+7, 3);
+  arg0 = bin3_to_dec(arg0_b);
+
+  memcpy(arg1_b, instr_b+10, 3);
+  arg1 = bin3_to_dec(arg1_b);
+
+  memcpy(dest_b, instr_b+13, 3);
+  dest = bin3_to_dec(dest_b);
+
+  ir_b = instr_b[6];
+  //printf("i/r: %c", ir_b);
+  ir = ir_b - '0';
+
 
   // IRimm MUX
   switch(opc1) {
@@ -277,11 +303,15 @@ generate_signals() {
       update_bsig(IRimm, &imm1);
       break;
     case 5:
-      //bsig[MDR] = imm2;
+      update_bsig(IRimm, &imm2);
       break;
     case 6:
       update_bsig(IRimm, &imm3);
       break;
+    case 7:
+      if(opc3 == 1) {
+        update_bsig(IRimm, &imm3);
+      }
   }
 
   // MARin mux
@@ -303,8 +333,20 @@ generate_signals() {
 
 
   // set op1 and op2 MUX
+  printf("opc2: %d", opc2);
   switch(opc1) {
   case 0:
+    update_opsel(2, MDR); // 7bit immediate
+    update_opsel(3, arg1);
+    update_opsel(0, MDR);
+    update_opsel(1, REG0);
+    update_csig(MAR_SEL, HI);
+    update_csig(MAR_LOAD, HI);
+    update_csig(MDR_LOAD, HI);
+    update_csig(MDR_SEL, HI);
+    update_rfsel(dest);
+    update_csig(RF_LOAD, HI);
+    break;
   case 1:
   case 2:
     update_opsel(2, MDR); // 7bit immediate
@@ -325,6 +367,9 @@ generate_signals() {
     update_csig(RF_LOAD, HI);
     break;
   case 5:
+    update_opsel(0, MDR);
+    update_opsel(1, REG0);
+    update_csig(PC_LOAD, HI);
     // op_sel: MDR, RF, MAR, FLAGS
     break;
   case 6:
@@ -336,9 +381,22 @@ generate_signals() {
     }
     update_opsel(1, arg1);
     update_rfsel(dest);
+    update_csig(MDR_SEL, HI);
     update_csig(RF_LOAD, HI);
     break;
   }
+  if (opc1 == 7 && opc2 == 0) {
+    switch(opc3) {
+      case 1:
+        // skip.c
+        update_opsel(0, arg0);
+        update_opsel(1, arg1);
+        strcpy(ALUfunc, "101"); // subtract
+        skipcond = 1;
+        break;
+    }
+  }
+
 
   // determine ALUfunc
   if(opc1 < 6) {
@@ -355,13 +413,28 @@ generate_signals() {
   update_bsig(OP1, &bsig[op1_sel]);
   update_bsig(OP2, &bsig[op2_sel]);
   update_bsig(OP3, &bsig[op3_sel]);
-  if (icycle == EXECUTE) {
+  if (icycle == EXECUTE || icycle == MEM) {
     aluresult = ALU(bsig[OP0], bsig[OP1], &ALUfunc);
   } else {
     aluresult = ALU(bsig[OP2], bsig[OP3], &ALUfunc);
   }
   update_bsig(ALUout, &aluresult);
 
+  // Condition testing
+  // 000 EQ, 001 NEQ
+  if (skipcond == 1) {
+    switch(dest) {
+      case 0:
+        if(flags[ZR] == HI)
+          update_csig(SKIP, HI);
+        break;
+      case 1:
+        if(flags[ZR] != HI)
+          update_csig(SKIP, HI);
+        break;
+
+    }
+  }
 }
 
 
@@ -374,7 +447,7 @@ latch(enum clkstate clk_phase) {
   // FETCH
 
   if(icycle == FETCH && clk_phase == clk_FE) {
-    bsig[MAR] = bsig[MARin];
+    bsig[MAR] = bsig[PC];
     printf("MAR <- %x\n", bsig[MAR]);
   }
 
@@ -405,8 +478,13 @@ latch(enum clkstate clk_phase) {
       bsig[MDR] = bsig[MDRin];
       printf("MDR <- %x\n", bsig[MDR]);
     }
-    if(csig[RF_LOAD] == HI) {
-      writerf();
+    if(csig[PC_LOAD] == HI) {
+      bsig[PC] = bsig[ALUout];
+      printf("PC <- %x\n", bsig[ALUout]);
+    }
+    if(csig[SKIP] == HI) {
+      bsig[PC]++;
+      printf("PC <- skip\n");
     }
   }
 
@@ -415,33 +493,22 @@ latch(enum clkstate clk_phase) {
     if(csig[RAM_LOAD] == HI){
       writeram();
     }
+    if(csig[RF_LOAD] == HI) {
+      writerf();
+    }
   }
-
-  /*
-
-  // RAM
-  if (csig[RAM_WREN] == HI) {
-    writeram(bsig[MAR], bsig[rf_sel]);
-    printf("RAM[%x] <- %x\n", bsig[MAR], bsig[rf_sel]);
-  }
-
-  // PC
-  if (csig[PC_LOAD] == HI) {
-    bsig[PC] = 0x666;
-   } else if (icycle == FETCH){
-    bsig[PC]++;
-  }
-
-  */
 
   // progress state
   if(clk_phase == clk_RE) {
     if (icycle == MEM ) {
       icycle = FETCH;
+      bsig[IR]=0;      // reset IR
     } else {
       icycle++;
     }
   }
+
+
 
 }
 
